@@ -29,7 +29,8 @@ function extraireAnnee(date) {
     if (!date) {
         return "Année inconnue";
     }
-    return date.slice(0, 4);
+    const [annee] = date.split("-");
+    return annee;
 }
 
 // ["Drama", "Comedy"] → "Drama, Comedy"
@@ -58,13 +59,8 @@ function afficherMessage(texte) {
 // ===== Cartes des résultats =====
 
 // Crée la carte d'une série : uniquement createElement et textContent, jamais innerHTML
-function creerCarteSerie(serie) {
-    const id = serie.id;
-    const titre = serie.name;
-    const genres = serie.genres;
-    const note = serie.rating.average;
-    const image = serie.image;
-    const annee = extraireAnnee(serie.premiered);
+function creerCarteSerie({ id, name: titre, genres, rating: { average: note }, image, premiered }) {
+    const annee = extraireAnnee(premiered);
 
     const carte = document.createElement("article");
     carte.className = "carte";
@@ -144,16 +140,18 @@ function ajouterInfo(liste, terme, valeur) {
 
 // Remplit et affiche la fiche détaillée d'une série
 function afficherDetail(serie, distribution) {
-    const titre = serie.name;
-    const genres = serie.genres;
-    const premiered = serie.premiered;
-    const ended = serie.ended;
-    const status = serie.status;
-    const network = serie.network;
-    const webChannel = serie.webChannel;
-    const note = serie.rating.average;
-    const image = serie.image;
-    const summary = serie.summary;
+    const {
+        name: titre,
+        genres,
+        premiered,
+        ended,
+        status,
+        network,
+        webChannel,
+        rating: { average: note },
+        image,
+        summary,
+    } = serie;
 
     zoneDetail.replaceChildren();
 
@@ -209,9 +207,9 @@ function afficherDetail(serie, distribution) {
         vide.textContent = "Distribution non renseignée.";
         listeRoles.append(vide);
     }
-    distribution.forEach((role) => {
+    distribution.forEach(({person: {name: acteur}, character: {name: personnage}}) => {
         const ligne = document.createElement("li");
-        ligne.textContent = `${role.person.name} (${role.character.name})`;
+        ligne.textContent = `${acteur} (${personnage})`;
         listeRoles.append(ligne);
     });
 
@@ -232,7 +230,7 @@ function afficherDetail(serie, distribution) {
 
 // Cherche la série et sa distribution dans les données, puis affiche la fiche
 function ouvrirDetail(idSerie) {
-    const serie = series.find((uneSerie) => uneSerie.id === idSerie);
+    const serie = series.find(({ id }) => id === idSerie);
     const distribution = distributions[idSerie] || [];
     afficherDetail(serie, distribution);
 }
@@ -250,7 +248,7 @@ function fermerDetail() {
 formRecherche.addEventListener("submit", (event) => {
     event.preventDefault();
     const terme = champRecherche.value.trim().toLowerCase();
-    const resultats = series.filter((serie) => serie.name.toLowerCase().includes(terme));
+    const resultats = series.filter(({ name }) => name.toLowerCase().includes(terme));
     afficherSeries(resultats);
 });
 
