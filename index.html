@@ -30,7 +30,7 @@
                 </form>
 
                 <!-- Tri des résultats : sert à partir de la fiche 2 (retirez alors l'attribut hidden) -->
-                <div id="outils" class="outils" hidden>
+                <div id="outils" class="outils">
                     <label for="choix-tri">Trier par</label>
                     <select id="choix-tri">
                         <option value="pertinence">pertinence</option>
@@ -57,8 +57,8 @@
             </div>
 
             <!-- Favoris : servent à partir de la fiche 2 (retirez alors l'attribut hidden) -->
-            <aside id="favoris" class="favoris" aria-labelledby="favoris-titre" hidden>
-                <h2 id="favoris-titre">Mes favoris</h2>
+            <aside id="favoris" class="favoris" aria-labelledby="favoris-titre">
+                <h2 id="favoris-titre" tabindex="-1">Mes favoris</h2>
                 <ul id="zone-favoris" class="liste-favoris"></ul>
             </aside>
         </main>

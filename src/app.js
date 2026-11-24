@@ -13,6 +13,12 @@ const champRecherche = document.querySelector("#champ-recherche");
 const zoneMessage = document.querySelector("#zone-message");
 const zoneDetail = document.querySelector("#zone-detail");
 const zoneResultats = document.querySelector("#zone-resultats");
+const choixTri = document.querySelector("#choix-tri");
+const zoneFavoris = document.querySelector("#zone-favoris");
+const titreFavoris = document.querySelector("#favoris-titre");
+
+let resultatsCourants = series;
+let favoris = [];
 
 // Statuts de TVmaze traduits en français
 const STATUTS = {
@@ -51,6 +57,50 @@ function texteSansBalises(html) {
     return documentLu.body.textContent;
 }
 
+function journaliser(action, ...details) {
+    console.log(`[Explorateur], ${action}`, ...details);
+}
+
+function estFavori(liste, idSerie) {
+    return liste.some(({ id }) => id === idSerie);
+}
+
+function ajouterAuxFavoris(liste, serie) {
+    if (estFavori(liste, serie.id)) {
+        return liste;
+    }
+
+    const { summary, ...serieLegere } = serie;
+    return [...liste, serieLegere];
+}
+
+function retirerDesFavoris(liste, idSerie) {
+    return liste.filter(({ id }) => id !== idSerie);
+}
+
+function trierSeries(liste, critere) {
+    const copie = [...liste];
+    if (critere === "titre") {
+        copie.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    if (critere === "note") {
+        copie.sort((a, b) => (b.rating.average || 0) - (a.rating.average || 0));
+    }
+
+    return copie;
+}
+
+function actualiserBoutonFavori(bouton, titre, enFavori) {
+    if (enFavori) {
+        bouton.textContent = "★ Retirer des favoris";
+        bouton.setAttribute("aria-label", `Retirer des favoris ${titre}`);
+    } else {
+        bouton.textContent = "☆ Ajouter aux favoris";
+        bouton.setAttribute("aria-label", `Ajouter aux favoris ${titre}`);
+    }
+}
+
 // Affiche un message dans la zone prévue (role="status" : lu par les lecteurs d'écran)
 function afficherMessage(texte) {
     zoneMessage.textContent = texte;
@@ -59,7 +109,10 @@ function afficherMessage(texte) {
 // ===== Cartes des résultats =====
 
 // Crée la carte d'une série : uniquement createElement et textContent, jamais innerHTML
-function creerCarteSerie({ id, name: titre, genres, rating: { average: note }, image, premiered }) {
+function creerCarteSerie(
+    { id, name: titre, genres, rating: { average: note }, image, premiered },
+    enFavori,
+) {
     const annee = extraireAnnee(premiered);
 
     const carte = document.createElement("article");
@@ -104,7 +157,14 @@ function creerCarteSerie({ id, name: titre, genres, rating: { average: note }, i
     boutonDetail.textContent = "Voir la fiche";
     boutonDetail.setAttribute("aria-label", `Voir la fiche de ${titre}`);
 
-    actions.append(boutonDetail);
+    const boutonFavori = document.createElement("button");
+    boutonFavori.type = "button";
+    boutonFavori.className = "bouton bouton-principal";
+    boutonFavori.dataset.action = "favori";
+    boutonFavori.dataset.id = id;
+    actualiserBoutonFavori(boutonFavori, titre, enFavori);
+
+    actions.append(boutonDetail, boutonFavori);
     corps.append(titreCarte, infos, texteNote, actions);
     carte.append(corps);
     return carte;
@@ -115,13 +175,64 @@ function afficherSeries(liste) {
     zoneResultats.replaceChildren(); // vide la grille
 
     liste.forEach((serie) => {
-        zoneResultats.append(creerCarteSerie(serie));
+        zoneResultats.append(creerCarteSerie(serie, estFavori(favoris, serie.id)));
     });
 
     if (liste.length === 0) {
         afficherMessage("Aucune série ne correspond à votre recherche.");
     } else {
         afficherMessage(`Séries affichées : ${liste.length}.`);
+    }
+}
+
+function afficherResultats() {
+    afficherSeries(trierSeries(resultatsCourants, choixTri.value));
+}
+
+function afficherFavoris(liste) {
+    zoneFavoris.replaceChildren();
+
+    if (liste.length === 0) {
+        const vide = document.createElement("li");
+        vide.className = "vide";
+        vide.textContent = "Aucun favori pour l'instant";
+        zoneFavoris.append(vide);
+        return;
+    }
+
+    liste.forEach(({ id, name: titre, premiered }) => {
+        const ligne = document.createElement("li");
+        const texte = document.createElement("span");
+        texte.textContent = `${titre} (${extraireAnnee(premiered)})`;
+
+        const bouton = document.createElement("button");
+        bouton.type = "button";
+        bouton.className = "bouton bouton-secondaire";
+        bouton.dataset.action = "retirer";
+        bouton.dataset.id = id;
+        bouton.textContent = "Retirer";
+        bouton.setAttribute("aria-label", `Retirer ${titre} des favoris`);
+
+        ligne.append(texte, bouton);
+        zoneFavoris.append(ligne);
+    });
+}
+
+function basculerFavori(idSerie) {
+    if (estFavori(favoris, idSerie)) {
+        favoris = retirerDesFavoris(favoris, idSerie);
+        journaliser("Favori retiré", idSerie);
+    } else {
+        const serie = resultatsCourants.find(({ id }) => id === idSerie);
+        favoris = ajouterAuxFavoris(favoris, serie);
+        journaliser("Favori ajouté", serie.name, idSerie);
+    }
+    afficherFavoris(favoris);
+
+    const bouton = zoneResultats.querySelector(`[data-action="favori"][data-id="${idSerie}"]`);
+    if (bouton) {
+        const titre = bouton.closest(".carte").querySelector(".carte-titre").textContent;
+        actualiserBoutonFavori(bouton, titre, estFavori(favoris, idSerie));
     }
 }
 
@@ -207,7 +318,7 @@ function afficherDetail(serie, distribution) {
         vide.textContent = "Distribution non renseignée.";
         listeRoles.append(vide);
     }
-    distribution.forEach(({person: {name: acteur}, character: {name: personnage}}) => {
+    distribution.forEach(({ person: { name: acteur }, character: { name: personnage } }) => {
         const ligne = document.createElement("li");
         ligne.textContent = `${acteur} (${personnage})`;
         listeRoles.append(ligne);
@@ -248,9 +359,12 @@ function fermerDetail() {
 formRecherche.addEventListener("submit", (event) => {
     event.preventDefault();
     const terme = champRecherche.value.trim().toLowerCase();
-    const resultats = series.filter(({ name }) => name.toLowerCase().includes(terme));
-    afficherSeries(resultats);
+    resultatsCourants = series.filter(({ name }) => name.toLowerCase().includes(terme));
+    journaliser("Recherche", terme, resultatsCourants.length);
+    afficherResultats();
 });
+
+choixTri.addEventListener("change", afficherResultats);
 
 // Délégation : un seul écouteur pour tous les boutons « Voir la fiche » de la grille
 zoneResultats.addEventListener("click", (event) => {
@@ -260,6 +374,16 @@ zoneResultats.addEventListener("click", (event) => {
     }
     if (bouton.dataset.action === "detail") {
         ouvrirDetail(Number(bouton.dataset.id));
+    } else if (bouton.dataset.action === "favori") {
+        basculerFavori(Number(bouton.dataset.id));
+    }
+});
+
+zoneFavoris.addEventListener("click", (event) => {
+    const bouton = event.target.closest("button[data-action='retirer']");
+    if (bouton) {
+        basculerFavori(Number(bouton.dataset.id));
+        titreFavoris.focus(); // le bouton a disparu : on garde le focus dans les favoris
     }
 });
 
@@ -270,4 +394,5 @@ zoneDetail.addEventListener("click", (event) => {
 });
 
 // ===== Démarrage : on affiche toutes les séries du jeu de données =====
-afficherSeries(series);
+afficherResultats();
+afficherFavoris(favoris);
