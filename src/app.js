@@ -13,6 +13,8 @@ import {
     mettreAJourBoutonFavori,
     afficherMessage,
     afficherChargement,
+    afficherErreur,
+    marqueOccupe,
 } from "./dom.js";
 import { initialiserEvenements } from "./events.js";
 import { distributions } from "./donnees.js";
@@ -47,11 +49,21 @@ function afficherResultats() {
 
 function lancerRecherche(terme) {
     afficherChargement("Recherche en cours");
-    rechercherSeries(terme, (resultats) => {
-        resultatsCourants = resultats;
-    journaliser("Recherche", terme, resultatsCourants.length);
-    afficherResultats();
-})
+    marqueOccupe(true);
+    rechercherSeries(terme)
+        .then((resultats) => {
+            resultatsCourants = resultats;
+            journaliser("Recherche", terme, resultatsCourants.length);
+            afficherResultats();
+        })
+        .catch((erreur) => {
+            resultatsCourants = [];
+            afficherResultats();
+            afficherErreur(erreur.message);
+        })
+        .finally(() => {
+            marqueOccupe(false);
+        });
 }
 
 function changerTri(critere) {
@@ -61,12 +73,19 @@ function changerTri(critere) {
 
 function ouvrirDetail(idSerie) {
     afficherChargement("Chargement de la fiche");
-    chargerSerie(idSerie, (serie) => {
-        chargerDistribution(idSerie, (distributions) => {
+    let serieChargee;
+    chargerSerie(idSerie)
+        .then((serie) => {
+            serieChargee = serie;
+            return chargerDistribution(idSerie);
+        })
+        .then((distributions) => {
             afficherMessage("");
-            afficherDetail(serie, distributions);
+            afficherDetail(serieChargee, distributions);
+        })
+        .catch((erreur) => {
+            afficherErreur(erreur.message);
         });
-    });
 }
 
 function basculerFavori(idSerie) {

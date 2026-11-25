@@ -138,14 +138,26 @@ function creerCarteSerie(serie, enFavori) {
 
 // ===== Fonctions exportées =====
 
+export function afficherErreur(texte) {
+    zoneMessage.textContent = texte;
+    zoneMessage.classList.add("erreur");
+    zoneMessage.classList.remove("chargement");
+}
+
+export function marqueOccupe(occupe) {
+    zoneResultats.setAttribute("aria-busy", String(occupe));
+}
+
 export function afficherChargement(texte) {
     zoneMessage.classList.add("chargement");
+    zoneMessage.classList.remove("erreur");
     zoneMessage.textContent = texte;
 }
 
 // Affiche un message dans la zone prévue (role="status" : lu par les lecteurs d'écran)
 export function afficherMessage(texte) {
     zoneMessage.classList.remove("chargement");
+    zoneMessage.classList.remove("erreur");
     zoneMessage.textContent = texte;
 }
 
