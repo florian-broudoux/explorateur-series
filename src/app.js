@@ -11,8 +11,11 @@ import {
     afficherDetail,
     fermerDetail,
     mettreAJourBoutonFavori,
+    afficherMessage,
+    afficherChargement,
 } from "./dom.js";
 import { initialiserEvenements } from "./events.js";
+import { distributions } from "./donnees.js";
 
 // ===== Données de l'application =====
 let resultatsCourants = []; // les séries de la dernière recherche
@@ -43,9 +46,12 @@ function afficherResultats() {
 // ===== Actions déclenchées par les événements =====
 
 function lancerRecherche(terme) {
-    resultatsCourants = rechercherSeries(terme);
+    afficherChargement("Recherche en cours");
+    rechercherSeries(terme, (resultats) => {
+        resultatsCourants = resultats;
     journaliser("Recherche", terme, resultatsCourants.length);
     afficherResultats();
+})
 }
 
 function changerTri(critere) {
@@ -54,7 +60,13 @@ function changerTri(critere) {
 }
 
 function ouvrirDetail(idSerie) {
-    afficherDetail(chargerSerie(idSerie), chargerDistribution(idSerie));
+    afficherChargement("Chargement de la fiche");
+    chargerSerie(idSerie, (serie) => {
+        chargerDistribution(idSerie, (distributions) => {
+            afficherMessage("");
+            afficherDetail(serie, distributions);
+        });
+    });
 }
 
 function basculerFavori(idSerie) {

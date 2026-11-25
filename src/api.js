@@ -5,18 +5,27 @@
 // =========================================================
 import { series, distributions } from "./donnees.js";
 
+const DELAI = 800;
+
 // Les séries dont le titre contient le texte cherché (toutes si le texte est vide)
-export function rechercherSeries(terme) {
-    const motCle = terme.trim().toLowerCase();
-    return series.filter(({ name }) => name.toLowerCase().includes(motCle));
+export function rechercherSeries(terme, quandPret) {
+    setTimeout(() => {
+        const motCle = terme.trim().toLowerCase();
+        const resultats = series.filter(({ name }) => name.toLowerCase().includes(motCle));
+        quandPret(resultats);
+    }, DELAI);
 }
 
 // Une série d'après son identifiant
-export function chargerSerie(idSerie) {
-    return series.find(({ id }) => id === idSerie);
+export function chargerSerie(idSerie, quandPret) {
+    setTimeout(() => {
+        quandPret(series.find(({ id }) => id === idSerie));
+    }, DELAI);
 }
 
 // La distribution d'une série (un tableau vide si elle n'est pas renseignée)
-export function chargerDistribution(idSerie) {
-    return distributions[idSerie] || [];
+export function chargerDistribution(idSerie, quandPret) {
+    setTimeout(() => {
+        quandPret(distributions[idSerie] || []);
+    }, DELAI);
 }

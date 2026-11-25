@@ -138,8 +138,14 @@ function creerCarteSerie(serie, enFavori) {
 
 // ===== Fonctions exportées =====
 
+export function afficherChargement(texte) {
+    zoneMessage.classList.add("chargement");
+    zoneMessage.textContent = texte;
+}
+
 // Affiche un message dans la zone prévue (role="status" : lu par les lecteurs d'écran)
 export function afficherMessage(texte) {
+    zoneMessage.classList.remove("chargement");
     zoneMessage.textContent = texte;
 }
 
