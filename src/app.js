@@ -1,221 +1,60 @@
 // =========================================================
-// Mon explorateur de séries : kit de départ
-// Ce code fonctionne, mais il est écrit « à l'ancienne » : il lit les données
-// propriété après propriété. Fiche après fiche, vous allez le moderniser
-// (déstructuration, spread, modules, asynchrone), puis le brancher sur l'API TVmaze.
-// Les données viennent de donnees.js, chargé juste avant ce fichier :
-// les constantes series et distributions y sont définies.
+// app.js : point d'entrée de l'application (fiche 3 : les modules)
+// Il importe les autres modules, garde les données de l'application
+// et relie les événements aux actions.
 // =========================================================
+import { rechercherSeries, chargerSerie, chargerDistribution } from "./api.js";
+import { estFavori, ajouterAuxFavoris, retirerDesFavoris } from "./favoris.js";
+import {
+    afficherSeries,
+    afficherFavoris,
+    afficherDetail,
+    fermerDetail,
+    mettreAJourBoutonFavori,
+} from "./dom.js";
+import { initialiserEvenements } from "./events.js";
 
-// ===== Éléments de la page =====
-const formRecherche = document.querySelector("#form-recherche");
-const champRecherche = document.querySelector("#champ-recherche");
-const zoneMessage = document.querySelector("#zone-message");
-const zoneDetail = document.querySelector("#zone-detail");
-const zoneResultats = document.querySelector("#zone-resultats");
-const choixTri = document.querySelector("#choix-tri");
-const zoneFavoris = document.querySelector("#zone-favoris");
-const titreFavoris = document.querySelector("#favoris-titre");
+// ===== Données de l'application =====
+let resultatsCourants = []; // les séries de la dernière recherche
+let favoris = []; // les séries mises en favori (jamais modifié : remplacé)
+let critereTri = "pertinence";
 
-let resultatsCourants = series;
-let favoris = [];
-
-// Statuts de TVmaze traduits en français
-const STATUTS = {
-    Running: "En cours",
-    Ended: "Terminée",
-    "To Be Determined": "Suite incertaine",
-    "In Development": "En préparation",
-};
-
-// ===== Petites fonctions utiles =====
-
-// "2005-01-03" → "2005"
-function extraireAnnee(date) {
-    if (!date) {
-        return "Année inconnue";
-    }
-    const [annee] = date.split("-");
-    return annee;
-}
-
-// ["Drama", "Comedy"] → "Drama, Comedy"
-function texteGenres(genres) {
-    if (genres.length === 0) {
-        return "Genre non précisé";
-    }
-    return genres.join(", ");
-}
-
-// Le résumé de TVmaze contient des balises HTML (<p>, <b>…) : on n'en garde que le texte.
-// DOMParser lit le HTML sans l'afficher ni l'exécuter ; textContent en extrait le texte.
-function texteSansBalises(html) {
-    if (!html) {
-        return "Pas de résumé disponible.";
-    }
-    const documentLu = new DOMParser().parseFromString(html, "text/html");
-    return documentLu.body.textContent;
-}
-
+// Affiche dans la console une action et autant de détails qu'on veut (paramètre rest)
 function journaliser(action, ...details) {
-    console.log(`[Explorateur], ${action}`, ...details);
+    console.log(`[Explorateur] ${action}`, ...details);
 }
 
-function estFavori(liste, idSerie) {
-    return liste.some(({ id }) => id === idSerie);
-}
-
-function ajouterAuxFavoris(liste, serie) {
-    if (estFavori(liste, serie.id)) {
-        return liste;
-    }
-
-    const { summary, ...serieLegere } = serie;
-    return [...liste, serieLegere];
-}
-
-function retirerDesFavoris(liste, idSerie) {
-    return liste.filter(({ id }) => id !== idSerie);
-}
-
+// Tri sur une copie, car .sort() modifie le tableau qu'il trie
 function trierSeries(liste, critere) {
     const copie = [...liste];
     if (critere === "titre") {
         copie.sort((a, b) => a.name.localeCompare(b.name));
-    }
-
-    if (critere === "note") {
+    } else if (critere === "note") {
+        // une série sans note (null) compte pour 0
         copie.sort((a, b) => (b.rating.average || 0) - (a.rating.average || 0));
     }
-
     return copie;
 }
 
-function actualiserBoutonFavori(bouton, titre, enFavori) {
-    if (enFavori) {
-        bouton.textContent = "★ Retirer des favoris";
-        bouton.setAttribute("aria-label", `Retirer des favoris ${titre}`);
-    } else {
-        bouton.textContent = "☆ Ajouter aux favoris";
-        bouton.setAttribute("aria-label", `Ajouter aux favoris ${titre}`);
-    }
-}
-
-// Affiche un message dans la zone prévue (role="status" : lu par les lecteurs d'écran)
-function afficherMessage(texte) {
-    zoneMessage.textContent = texte;
-}
-
-// ===== Cartes des résultats =====
-
-// Crée la carte d'une série : uniquement createElement et textContent, jamais innerHTML
-function creerCarteSerie(
-    { id, name: titre, genres, rating: { average: note }, image, premiered },
-    enFavori,
-) {
-    const annee = extraireAnnee(premiered);
-
-    const carte = document.createElement("article");
-    carte.className = "carte";
-
-    if (image) {
-        const affiche = document.createElement("img");
-        affiche.className = "carte-affiche";
-        affiche.src = image.medium;
-        affiche.alt = `Affiche de ${titre}`;
-        carte.append(affiche);
-    } else {
-        const sansAffiche = document.createElement("div");
-        sansAffiche.className = "carte-affiche sans-affiche";
-        sansAffiche.textContent = "Pas d'affiche";
-        carte.append(sansAffiche);
-    }
-
-    const corps = document.createElement("div");
-    corps.className = "carte-corps";
-
-    const titreCarte = document.createElement("h3");
-    titreCarte.className = "carte-titre";
-    titreCarte.textContent = titre;
-
-    const infos = document.createElement("p");
-    infos.className = "carte-infos";
-    infos.textContent = `${annee} · ${texteGenres(genres)}`;
-
-    const texteNote = document.createElement("p");
-    texteNote.className = "carte-note";
-    texteNote.textContent = note !== null ? `★ ${note} / 10` : "Pas encore notée";
-
-    const actions = document.createElement("div");
-    actions.className = "carte-actions";
-
-    const boutonDetail = document.createElement("button");
-    boutonDetail.type = "button";
-    boutonDetail.className = "bouton bouton-secondaire";
-    boutonDetail.dataset.action = "detail";
-    boutonDetail.dataset.id = id;
-    boutonDetail.textContent = "Voir la fiche";
-    boutonDetail.setAttribute("aria-label", `Voir la fiche de ${titre}`);
-
-    const boutonFavori = document.createElement("button");
-    boutonFavori.type = "button";
-    boutonFavori.className = "bouton bouton-principal";
-    boutonFavori.dataset.action = "favori";
-    boutonFavori.dataset.id = id;
-    actualiserBoutonFavori(boutonFavori, titre, enFavori);
-
-    actions.append(boutonDetail, boutonFavori);
-    corps.append(titreCarte, infos, texteNote, actions);
-    carte.append(corps);
-    return carte;
-}
-
-// Affiche une liste de séries dans la grille
-function afficherSeries(liste) {
-    zoneResultats.replaceChildren(); // vide la grille
-
-    liste.forEach((serie) => {
-        zoneResultats.append(creerCarteSerie(serie, estFavori(favoris, serie.id)));
-    });
-
-    if (liste.length === 0) {
-        afficherMessage("Aucune série ne correspond à votre recherche.");
-    } else {
-        afficherMessage(`Séries affichées : ${liste.length}.`);
-    }
-}
-
 function afficherResultats() {
-    afficherSeries(trierSeries(resultatsCourants, choixTri.value));
+    afficherSeries(trierSeries(resultatsCourants, critereTri), favoris);
 }
 
-function afficherFavoris(liste) {
-    zoneFavoris.replaceChildren();
+// ===== Actions déclenchées par les événements =====
 
-    if (liste.length === 0) {
-        const vide = document.createElement("li");
-        vide.className = "vide";
-        vide.textContent = "Aucun favori pour l'instant";
-        zoneFavoris.append(vide);
-        return;
-    }
+function lancerRecherche(terme) {
+    resultatsCourants = rechercherSeries(terme);
+    journaliser("Recherche", terme, resultatsCourants.length);
+    afficherResultats();
+}
 
-    liste.forEach(({ id, name: titre, premiered }) => {
-        const ligne = document.createElement("li");
-        const texte = document.createElement("span");
-        texte.textContent = `${titre} (${extraireAnnee(premiered)})`;
+function changerTri(critere) {
+    critereTri = critere;
+    afficherResultats();
+}
 
-        const bouton = document.createElement("button");
-        bouton.type = "button";
-        bouton.className = "bouton bouton-secondaire";
-        bouton.dataset.action = "retirer";
-        bouton.dataset.id = id;
-        bouton.textContent = "Retirer";
-        bouton.setAttribute("aria-label", `Retirer ${titre} des favoris`);
-
-        ligne.append(texte, bouton);
-        zoneFavoris.append(ligne);
-    });
+function ouvrirDetail(idSerie) {
+    afficherDetail(chargerSerie(idSerie), chargerDistribution(idSerie));
 }
 
 function basculerFavori(idSerie) {
@@ -228,171 +67,16 @@ function basculerFavori(idSerie) {
         journaliser("Favori ajouté", serie.name, idSerie);
     }
     afficherFavoris(favoris);
-
-    const bouton = zoneResultats.querySelector(`[data-action="favori"][data-id="${idSerie}"]`);
-    if (bouton) {
-        const titre = bouton.closest(".carte").querySelector(".carte-titre").textContent;
-        actualiserBoutonFavori(bouton, titre, estFavori(favoris, idSerie));
-    }
+    mettreAJourBoutonFavori(idSerie, estFavori(favoris, idSerie));
 }
 
-// ===== Fiche détaillée =====
-
-// Ajoute une ligne « terme : valeur » à une liste de définitions <dl>
-function ajouterInfo(liste, terme, valeur) {
-    const ligne = document.createElement("div");
-    const dt = document.createElement("dt");
-    const dd = document.createElement("dd");
-    dt.textContent = terme;
-    dd.textContent = valeur;
-    ligne.append(dt, dd);
-    liste.append(ligne);
-}
-
-// Remplit et affiche la fiche détaillée d'une série
-function afficherDetail(serie, distribution) {
-    const {
-        name: titre,
-        genres,
-        premiered,
-        ended,
-        status,
-        network,
-        webChannel,
-        rating: { average: note },
-        image,
-        summary,
-    } = serie;
-
-    zoneDetail.replaceChildren();
-
-    if (image) {
-        const affiche = document.createElement("img");
-        affiche.className = "detail-affiche";
-        affiche.src = image.medium;
-        affiche.alt = `Affiche de ${titre}`;
-        zoneDetail.append(affiche);
-    }
-
-    const texte = document.createElement("div");
-
-    const titreDetail = document.createElement("h2");
-    titreDetail.id = "detail-titre";
-    titreDetail.tabIndex = -1; // pour pouvoir y placer le focus
-    titreDetail.textContent = titre;
-
-    let diffuseur = "Diffuseur inconnu";
-    if (network) {
-        diffuseur = network.name;
-    } else if (webChannel) {
-        diffuseur = webChannel.name;
-    }
-
-    let periode = `depuis ${extraireAnnee(premiered)}`;
-    if (ended) {
-        periode = `${extraireAnnee(premiered)} – ${extraireAnnee(ended)}`;
-    }
-
-    const infos = document.createElement("dl");
-    infos.className = "detail-infos";
-    ajouterInfo(infos, "Années", periode);
-    ajouterInfo(infos, "Statut", STATUTS[status] || status);
-    ajouterInfo(infos, "Diffusion", diffuseur);
-    ajouterInfo(infos, "Genres", texteGenres(genres));
-    ajouterInfo(infos, "Note", note !== null ? `${note} / 10` : "Pas encore notée");
-
-    const resume = document.createElement("p");
-    resume.className = "detail-resume";
-    resume.textContent = texteSansBalises(summary); // le texte seul, jamais le HTML reçu
-    if (summary) {
-        resume.lang = "en"; // les résumés de TVmaze sont en anglais
-    }
-
-    const titreDistribution = document.createElement("h3");
-    titreDistribution.textContent = "Distribution";
-
-    const listeRoles = document.createElement("ul");
-    listeRoles.className = "detail-distribution";
-    if (distribution.length === 0) {
-        const vide = document.createElement("li");
-        vide.textContent = "Distribution non renseignée.";
-        listeRoles.append(vide);
-    }
-    distribution.forEach(({ person: { name: acteur }, character: { name: personnage } }) => {
-        const ligne = document.createElement("li");
-        ligne.textContent = `${acteur} (${personnage})`;
-        listeRoles.append(ligne);
-    });
-
-    const actions = document.createElement("div");
-    actions.className = "detail-actions";
-    const boutonFermer = document.createElement("button");
-    boutonFermer.type = "button";
-    boutonFermer.className = "bouton bouton-secondaire";
-    boutonFermer.dataset.action = "fermer";
-    boutonFermer.textContent = "Fermer la fiche";
-    actions.append(boutonFermer);
-
-    texte.append(titreDetail, infos, resume, titreDistribution, listeRoles, actions);
-    zoneDetail.append(texte);
-    zoneDetail.hidden = false;
-    titreDetail.focus(); // on amène le lecteur (et le lecteur d'écran) sur la fiche
-}
-
-// Cherche la série et sa distribution dans les données, puis affiche la fiche
-function ouvrirDetail(idSerie) {
-    const serie = series.find(({ id }) => id === idSerie);
-    const distribution = distributions[idSerie] || [];
-    afficherDetail(serie, distribution);
-}
-
-// Cache la fiche et ramène le focus sur la recherche
-function fermerDetail() {
-    zoneDetail.hidden = true;
-    zoneDetail.replaceChildren();
-    champRecherche.focus();
-}
-
-// ===== Événements =====
-
-// Recherche : on filtre les séries dont le titre contient le texte saisi
-formRecherche.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const terme = champRecherche.value.trim().toLowerCase();
-    resultatsCourants = series.filter(({ name }) => name.toLowerCase().includes(terme));
-    journaliser("Recherche", terme, resultatsCourants.length);
-    afficherResultats();
+// ===== Démarrage =====
+initialiserEvenements({
+    surRecherche: lancerRecherche,
+    surTri: changerTri,
+    surDetail: ouvrirDetail,
+    surFavori: basculerFavori,
+    surFermer: fermerDetail,
 });
-
-choixTri.addEventListener("change", afficherResultats);
-
-// Délégation : un seul écouteur pour tous les boutons « Voir la fiche » de la grille
-zoneResultats.addEventListener("click", (event) => {
-    const bouton = event.target.closest("button[data-action]");
-    if (!bouton) {
-        return;
-    }
-    if (bouton.dataset.action === "detail") {
-        ouvrirDetail(Number(bouton.dataset.id));
-    } else if (bouton.dataset.action === "favori") {
-        basculerFavori(Number(bouton.dataset.id));
-    }
-});
-
-zoneFavoris.addEventListener("click", (event) => {
-    const bouton = event.target.closest("button[data-action='retirer']");
-    if (bouton) {
-        basculerFavori(Number(bouton.dataset.id));
-        titreFavoris.focus(); // le bouton a disparu : on garde le focus dans les favoris
-    }
-});
-
-zoneDetail.addEventListener("click", (event) => {
-    if (event.target.closest("[data-action='fermer']")) {
-        fermerDetail();
-    }
-});
-
-// ===== Démarrage : on affiche toutes les séries du jeu de données =====
-afficherResultats();
+lancerRecherche(""); // un texte vide : toutes les séries du jeu de données
 afficherFavoris(favoris);

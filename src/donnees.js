@@ -4,7 +4,7 @@
 // Remarquez les valeurs null : une série sans note (rating.average), sans résumé (summary),
 // sans date de fin (ended), diffusée par une chaîne (network) ou par une plateforme (webChannel).
 
-const series = [
+export const series = [
     {
         id: 7092,
         name: "Kaamelott",
@@ -209,7 +209,7 @@ const series = [
 
 // Distribution (4 premiers rôles au plus), rangée par identifiant de série.
 // Deux séries n'ont pas de distribution dans ce jeu de données.
-const distributions = {
+export const distributions = {
     335: [
         {
             person: { name: "Benedict Cumberbatch" },
