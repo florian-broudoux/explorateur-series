@@ -48,6 +48,10 @@ function afficherResultats() {
 // ===== Actions déclenchées par les événements =====
 
 async function lancerRecherche(terme) {
+    if (terme.trim() === "") {
+        afficherMessage("Saisissez le titre d'une série, puis lancez la recherche.");
+        return;
+    }
     afficherChargement("Recherche en cours");
     marqueOccupe(true);
     try {
@@ -103,5 +107,5 @@ initialiserEvenements({
     surFavori: basculerFavori,
     surFermer: fermerDetail,
 });
-lancerRecherche(""); // un texte vide : toutes les séries du jeu de données
+afficherMessage("Saisissez le titre d'une série, puis lancez la recherche.");
 afficherFavoris(favoris);

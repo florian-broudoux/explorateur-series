@@ -285,7 +285,8 @@ export function afficherDetail(serie, distribution) {
         vide.textContent = "Distribution non renseignée.";
         listeRoles.append(vide);
     }
-    distribution.forEach(({ person: { name: acteur }, character: { name: personnage } }) => {
+    const premierRoles = distribution.slice(0, 6);
+    premierRoles.forEach(({ person: { name: acteur }, character: { name: personnage } }) => {
         const ligne = document.createElement("li");
         ligne.textContent = `${acteur} (${personnage})`;
         listeRoles.append(ligne);

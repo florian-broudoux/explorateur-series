@@ -5,35 +5,56 @@
 // =========================================================
 import { series, distributions } from "./donnees.js";
 
-const DELAI = 800;
+const URL_API = "https://api.tvmaze.com";
+const MODE_DEMO = false;
+const DELAI_DEMO = 800;
 
 function attendre(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function lireJSON(chemin) {
+    const reponse = await fetch(URL_API + chemin);
+    if (!reponse.ok) {
+        throw new Error(`TVmaze a répondu avec le code ${reponse.status}`);
+    }
+    return reponse.json();
+}
+
 // Les séries dont le titre contient le texte cherché (toutes si le texte est vide)
 export async function rechercherSeries(terme) {
-    await attendre(DELAI);
     const motCle = terme.trim().toLowerCase();
-    if (motCle === "panne") {
-        throw new Error("Le serveur ne répond pas (panne simulée).");
+    if (MODE_DEMO) {
+        await attendre(DELAI_DEMO);
+        if (motCle === "panne") {
+            throw new Error("Le serveur ne répond pas (panne simulée).");
+        }
+        return series.filter(({ name }) => name.toLowerCase().includes(motCle));
     }
-    return series.filter(({ name }) => name.toLowerCase().includes(motCle));
+
+    const resultats = await lireJSON(`/search/shows?q=${encodeURIComponent(motCle)}`);
+    return resultats.map(({ show }) => show);
 }
 
 // Une série d'après son identifiant
 export async function chargerSerie(idSerie) {
-    await attendre(DELAI);
-    const serie = series.find(({ id }) => id === idSerie);
-    if (serie) {
-        return serie;
-    } else {
-        throw new Error("Cette série est introuvable.");
+    if (MODE_DEMO) {
+        await attendre(DELAI_DEMO);
+        const serie = series.find(({ id }) => id === idSerie);
+        if (serie) {
+            return serie;
+        } else {
+            throw new Error("Cette série est introuvable.");
+        }
     }
+    return lireJSON(`/shows/${idSerie}`);
 }
 
 // La distribution d'une série (un tableau vide si elle n'est pas renseignée)
 export async function chargerDistribution(idSerie) {
-    await attendre(DELAI);
-    return distributions[idSerie] || [];
+    if (MODE_DEMO) {
+        await attendre(DELAI_DEMO);
+        return distributions[idSerie] || [];
+    }
+    return lireJSON(`/shows/${idSerie}/cast`);
 }
