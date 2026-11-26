@@ -47,23 +47,20 @@ function afficherResultats() {
 
 // ===== Actions déclenchées par les événements =====
 
-function lancerRecherche(terme) {
+async function lancerRecherche(terme) {
     afficherChargement("Recherche en cours");
     marqueOccupe(true);
-    rechercherSeries(terme)
-        .then((resultats) => {
-            resultatsCourants = resultats;
-            journaliser("Recherche", terme, resultatsCourants.length);
-            afficherResultats();
-        })
-        .catch((erreur) => {
-            resultatsCourants = [];
-            afficherResultats();
-            afficherErreur(erreur.message);
-        })
-        .finally(() => {
-            marqueOccupe(false);
-        });
+    try {
+        resultatsCourants = await rechercherSeries(terme);
+        journaliser("Recherche", terme, resultatsCourants.length);
+        afficherResultats();
+    } catch (erreur) {
+        resultatsCourants = [];
+        afficherResultats();
+        afficherErreur(erreur.message);
+    } finally {
+        marqueOccupe(false);
+    }
 }
 
 function changerTri(critere) {
@@ -71,21 +68,18 @@ function changerTri(critere) {
     afficherResultats();
 }
 
-function ouvrirDetail(idSerie) {
+async function ouvrirDetail(idSerie) {
     afficherChargement("Chargement de la fiche");
-    let serieChargee;
-    chargerSerie(idSerie)
-        .then((serie) => {
-            serieChargee = serie;
-            return chargerDistribution(idSerie);
-        })
-        .then((distributions) => {
-            afficherMessage("");
-            afficherDetail(serieChargee, distributions);
-        })
-        .catch((erreur) => {
-            afficherErreur(erreur.message);
-        });
+    try {
+        const [serie, distribution] = await Promise.all([
+            chargerSerie(idSerie),
+            chargerDistribution(idSerie),
+        ]);
+        afficherMessage("");
+        afficherDetail(serie, distribution);
+    } catch (erreur) {
+        afficherErreur(erreur.message);
+    }
 }
 
 function basculerFavori(idSerie) {
