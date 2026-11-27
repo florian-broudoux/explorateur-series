@@ -3,6 +3,8 @@
 // Elles ne modifient jamais le tableau reçu : elles en renvoient un nouveau.
 // =========================================================
 
+const CLE_STOCKAGE = "explorateur-series.favoris";
+
 export function estFavori(liste, idSerie) {
     return liste.some(({ id }) => id === idSerie);
 }
@@ -17,4 +19,18 @@ export function ajouterAuxFavoris(liste, serie) {
 
 export function retirerDesFavoris(liste, idSerie) {
     return liste.filter(({ id }) => id !== idSerie);
+}
+
+export function chargerFavoris() {
+    try {
+        const texte = localStorage.getItem(CLE_STOCKAGE);
+        return texte ? JSON.parse(texte) : [];
+    } catch {
+        // texte abîmé ou stockage interdit : on repart d'une liste vide
+        return [];
+    }
+}
+
+export function sauvegarderFavoris(liste) {
+    localStorage.setItem(CLE_STOCKAGE, JSON.stringify(liste));
 }

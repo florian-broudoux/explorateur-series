@@ -13,10 +13,31 @@ function attendre(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function messageErreurHTTP(statut) {
+    if (statut === 404) {
+        return "Série introuvable";
+    }
+    if (statut === 429) {
+        return "Trop de requêtes : TVmaze en accepte au plus 20 toutes les 10 secondes";
+    }
+    if (statut >= 500) {
+        return "TVMaze a un problème";
+    }
+    return `Erreur ${statut}`;
+}
+
 async function lireJSON(chemin) {
-    const reponse = await fetch(URL_API + chemin);
+    let reponse;
+    try {
+        reponse = await fetch(URL_API + chemin);
+    } catch (erreur) {
+        if (erreur instanceof TypeError) {
+            throw new Error("Impossible de joindre TVmaze : vérifiez votre connexion Internet.");
+        }
+        throw erreur;
+    }
     if (!reponse.ok) {
-        throw new Error(`TVmaze a répondu avec le code ${reponse.status}`);
+        throw new Error(messageErreurHTTP(reponse.status));
     }
     return reponse.json();
 }

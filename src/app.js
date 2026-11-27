@@ -4,7 +4,13 @@
 // et relie les événements aux actions.
 // =========================================================
 import { rechercherSeries, chargerSerie, chargerDistribution } from "./api.js";
-import { estFavori, ajouterAuxFavoris, retirerDesFavoris } from "./favoris.js";
+import {
+    estFavori,
+    ajouterAuxFavoris,
+    retirerDesFavoris,
+    chargerFavoris,
+    sauvegarderFavoris,
+} from "./favoris.js";
 import {
     afficherSeries,
     afficherFavoris,
@@ -21,7 +27,7 @@ import { distributions } from "./donnees.js";
 
 // ===== Données de l'application =====
 let resultatsCourants = []; // les séries de la dernière recherche
-let favoris = []; // les séries mises en favori (jamais modifié : remplacé)
+let favoris = chargerFavoris();
 let critereTri = "pertinence";
 
 // Affiche dans la console une action et autant de détails qu'on veut (paramètre rest)
@@ -58,6 +64,9 @@ async function lancerRecherche(terme) {
         resultatsCourants = await rechercherSeries(terme);
         journaliser("Recherche", terme, resultatsCourants.length);
         afficherResultats();
+        if (resultatsCourants.length === 0) {
+            afficherMessage(`Aucune série ne correspond à « ${terme.trim()} ».`);
+        }
     } catch (erreur) {
         resultatsCourants = [];
         afficherResultats();
@@ -96,6 +105,7 @@ function basculerFavori(idSerie) {
         journaliser("Favori ajouté", serie.name, idSerie);
     }
     afficherFavoris(favoris);
+    sauvegarderFavoris(favoris);
     mettreAJourBoutonFavori(idSerie, estFavori(favoris, idSerie));
 }
 
