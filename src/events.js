@@ -38,10 +38,15 @@ export function initialiserEvenements({ surRecherche, surTri, surDetail, surFavo
         }
     });
 
-    // Bouton « Fermer la fiche »
     zoneDetail.addEventListener("click", (event) => {
-        if (event.target.closest("[data-action='fermer']")) {
+        const bouton = event.target.closest("button[data-action]");
+        if (!bouton) {
+            return;
+        }
+        if (bouton.dataset.action === "fermer") {
             surFermer();
+        } else if (bouton.dataset.action === "favori") {
+            surFavori(Number(bouton.dataset.id));
         }
     });
 

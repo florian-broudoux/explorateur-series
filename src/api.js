@@ -1,8 +1,4 @@
-// =========================================================
-// api.js : l'accès aux données (fiche 3 : le jeu de données local)
-// Les autres modules ne savent pas d'où viennent les séries : quand l'application
-// interrogera TVmaze (fiche 7), seul ce fichier changera.
-// =========================================================
+
 import { series, distributions } from "./donnees.js";
 
 const URL_API = "https://api.tvmaze.com";
@@ -75,7 +71,7 @@ export async function chargerSerie(idSerie) {
 export async function chargerDistribution(idSerie) {
     if (MODE_DEMO) {
         await attendre(DELAI_DEMO);
-        return distributions[idSerie] || [];
+        return distributions[idSerie] ?? [];
     }
     return lireJSON(`/shows/${idSerie}/cast`);
 }

@@ -1,7 +1,6 @@
 // =========================================================
 // dom.js : tout ce qui touche à l'affichage
-// Seules les fonctions précédées de export sont utilisables ailleurs ;
-// les autres restent internes au module.
+// Une seule fonction exportée, rendu(state)
 // =========================================================
 
 const champRecherche = document.querySelector("#champ-recherche");
@@ -10,7 +9,6 @@ const zoneDetail = document.querySelector("#zone-detail");
 const zoneResultats = document.querySelector("#zone-resultats");
 const zoneFavoris = document.querySelector("#zone-favoris");
 
-// Statuts de TVmaze traduits en français
 const STATUTS = {
     Running: "En cours",
     Ended: "Terminée",
@@ -18,7 +16,10 @@ const STATUTS = {
     "In Development": "En préparation",
 };
 
-// ===== Petites fonctions utiles (internes) =====
+// Identifiant de la série dont la fiche est affichée (null : aucune)
+let idDetailAffiche = null;
+
+// ===== Petites fonctions utiles =====
 
 // "2005-01-03" → "2005"
 function extraireAnnee(date) {
@@ -47,6 +48,23 @@ function texteSansBalises(html) {
     return documentLu.body.textContent;
 }
 
+// Le texte du message selon l'état : des return successifs, plus lisibles que des ternaires imbriqués
+function texteDuMessage({ chargement, erreur, terme, resultats }) {
+    if (chargement) {
+        return "Chargement";
+    }
+    if (erreur) {
+        return erreur;
+    }
+    if (terme === "") {
+        return "Saisissez le titre d'une série, puis lancez la recherche.";
+    }
+    if (resultats.length === 0) {
+        return `Aucune série ne correspond à « ${terme} ».`;
+    }
+    return `Séries trouvées : ${resultats.length}.`;
+}
+
 // Ajoute une ligne « terme : valeur » à une liste de définitions <dl>
 function ajouterInfo(liste, terme, valeur) {
     const ligne = document.createElement("div");
@@ -58,8 +76,13 @@ function ajouterInfo(liste, terme, valeur) {
     liste.append(ligne);
 }
 
-// Texte et nom accessible du bouton favori, selon que la série est en favori ou non
-function actualiserBoutonFavori(bouton, titre, enFavori) {
+// Crée un bouton favori (dans une carte ou dans la fiche détaillée)
+function creerBoutonFavori(id, titre, enFavori) {
+    const bouton = document.createElement("button");
+    bouton.type = "button";
+    bouton.className = "bouton bouton-principal";
+    bouton.dataset.action = "favori";
+    bouton.dataset.id = id;
     if (enFavori) {
         bouton.textContent = "★ Retirer des favoris";
         bouton.setAttribute("aria-label", `Retirer des favoris : ${titre}`);
@@ -67,27 +90,22 @@ function actualiserBoutonFavori(bouton, titre, enFavori) {
         bouton.textContent = "☆ Ajouter aux favoris";
         bouton.setAttribute("aria-label", `Ajouter aux favoris : ${titre}`);
     }
+    return bouton;
 }
 
 // Crée la carte d'une série : uniquement createElement et textContent, jamais innerHTML
 function creerCarteSerie(serie, enFavori) {
-    const {
-        id,
-        name: titre,
-        genres,
-        premiered,
-        rating: { average: note },
-        image,
-    } = serie;
-    const annee = extraireAnnee(premiered);
+    const { id, name: titre, genres, premiered, rating, image } = serie;
+    const note = rating?.average ?? null;
+    const urlAffiche = image?.medium;
 
     const carte = document.createElement("article");
     carte.className = "carte";
 
-    if (image) {
+    if (urlAffiche) {
         const affiche = document.createElement("img");
         affiche.className = "carte-affiche";
-        affiche.src = image.medium;
+        affiche.src = urlAffiche;
         affiche.alt = `Affiche de ${titre}`;
         carte.append(affiche);
     } else {
@@ -106,11 +124,11 @@ function creerCarteSerie(serie, enFavori) {
 
     const infos = document.createElement("p");
     infos.className = "carte-infos";
-    infos.textContent = `${annee} · ${texteGenres(genres)}`;
+    infos.textContent = `${extraireAnnee(premiered)} · ${texteGenres(genres)}`;
 
     const texteNote = document.createElement("p");
     texteNote.className = "carte-note";
-    texteNote.textContent = note !== null ? `★ ${note} / 10` : "Pas encore notée";
+    texteNote.textContent = note === null ? "Pas encore notée" : `★ ${note} / 10`;
 
     const actions = document.createElement("div");
     actions.className = "carte-actions";
@@ -123,74 +141,37 @@ function creerCarteSerie(serie, enFavori) {
     boutonDetail.textContent = "Voir la fiche";
     boutonDetail.setAttribute("aria-label", `Voir la fiche de ${titre}`);
 
-    const boutonFavori = document.createElement("button");
-    boutonFavori.type = "button";
-    boutonFavori.className = "bouton bouton-principal";
-    boutonFavori.dataset.action = "favori";
-    boutonFavori.dataset.id = id;
-    actualiserBoutonFavori(boutonFavori, titre, enFavori);
-
-    actions.append(boutonDetail, boutonFavori);
+    actions.append(boutonDetail, creerBoutonFavori(id, titre, enFavori));
     corps.append(titreCarte, infos, texteNote, actions);
     carte.append(corps);
     return carte;
 }
 
-// ===== Fonctions exportées =====
+// ===== Les zones de la page, chacune dessinée à partir de l'état =====
 
-export function afficherErreur(texte) {
-    zoneMessage.textContent = texte;
-    zoneMessage.classList.add("erreur");
-    zoneMessage.classList.remove("chargement");
+function afficherMessage(state) {
+    const texte = texteDuMessage(state);
+    zoneMessage.classList.toggle("chargement", state.chargement);
+    zoneMessage.classList.toggle("erreur", !state.chargement && Boolean(state.erreur));
+    // on ne touche au texte que s'il change : le lecteur d'écran ne le relit pas pour rien
+    if (zoneMessage.textContent !== texte) {
+        zoneMessage.textContent = texte;
+    }
 }
 
-export function marqueOccupe(occupe) {
-    zoneResultats.setAttribute("aria-busy", String(occupe));
-}
-
-export function afficherChargement(texte) {
-    zoneMessage.classList.add("chargement");
-    zoneMessage.classList.remove("erreur");
-    zoneMessage.textContent = texte;
-}
-
-// Affiche un message dans la zone prévue (role="status" : lu par les lecteurs d'écran)
-export function afficherMessage(texte) {
-    zoneMessage.classList.remove("chargement");
-    zoneMessage.classList.remove("erreur");
-    zoneMessage.textContent = texte;
-}
-
-// Affiche une liste de séries dans la grille ; favoris sert à choisir le texte des boutons
-export function afficherSeries(liste, favoris) {
-    zoneResultats.replaceChildren(); // vide la grille
-
-    liste.forEach((serie) => {
+function afficherSeries({ resultats, favoris, chargement }) {
+    zoneResultats.setAttribute("aria-busy", String(chargement));
+    zoneResultats.replaceChildren();
+    resultats.forEach((serie) => {
         const enFavori = favoris.some(({ id }) => id === serie.id);
         zoneResultats.append(creerCarteSerie(serie, enFavori));
     });
-
-    if (liste.length === 0) {
-        afficherMessage("Aucune série ne correspond à votre recherche.");
-    } else {
-        afficherMessage(`Séries affichées : ${liste.length}.`);
-    }
 }
 
-// Met à jour le bouton favori d'une carte, s'il est affiché
-export function mettreAJourBoutonFavori(idSerie, enFavori) {
-    const bouton = zoneResultats.querySelector(`[data-action="favori"][data-id="${idSerie}"]`);
-    if (bouton) {
-        const titre = bouton.closest(".carte").querySelector(".carte-titre").textContent;
-        actualiserBoutonFavori(bouton, titre, enFavori);
-    }
-}
-
-// Affiche la liste des favoris
-export function afficherFavoris(liste) {
+function afficherFavoris({ favoris }) {
     zoneFavoris.replaceChildren();
 
-    if (liste.length === 0) {
+    if (favoris.length === 0) {
         const vide = document.createElement("li");
         vide.className = "vide";
         vide.textContent = "Aucun favori pour l'instant.";
@@ -198,7 +179,7 @@ export function afficherFavoris(liste) {
         return;
     }
 
-    liste.forEach(({ id, name: titre, premiered }) => {
+    favoris.forEach(({ id, name: titre, premiered }) => {
         const ligne = document.createElement("li");
         const texte = document.createElement("span");
         texte.textContent = `${titre} (${extraireAnnee(premiered)})`;
@@ -216,9 +197,17 @@ export function afficherFavoris(liste) {
     });
 }
 
-// Remplit et affiche la fiche détaillée d'une série
-export function afficherDetail(serie, distribution) {
+function afficherDetail({ detail, favoris }) {
+    zoneDetail.replaceChildren();
+
+    if (detail === null) {
+        zoneDetail.hidden = true;
+        return;
+    }
+
+    const { serie, distribution } = detail;
     const {
+        id,
         name: titre,
         genres,
         premiered,
@@ -226,14 +215,12 @@ export function afficherDetail(serie, distribution) {
         status,
         network,
         webChannel,
-        rating: { average: note },
+        rating,
         image,
         summary,
     } = serie;
 
-    zoneDetail.replaceChildren();
-
-    if (image) {
+    if (image?.medium) {
         const affiche = document.createElement("img");
         affiche.className = "detail-affiche";
         affiche.src = image.medium;
@@ -248,25 +235,19 @@ export function afficherDetail(serie, distribution) {
     titreDetail.tabIndex = -1; // pour pouvoir y placer le focus
     titreDetail.textContent = titre;
 
-    let diffuseur = "Diffuseur inconnu";
-    if (network) {
-        diffuseur = network.name;
-    } else if (webChannel) {
-        diffuseur = webChannel.name;
-    }
-
     let periode = `depuis ${extraireAnnee(premiered)}`;
     if (ended) {
         periode = `${extraireAnnee(premiered)} – ${extraireAnnee(ended)}`;
     }
+    const note = rating?.average ?? null;
 
     const infos = document.createElement("dl");
     infos.className = "detail-infos";
     ajouterInfo(infos, "Années", periode);
-    ajouterInfo(infos, "Statut", STATUTS[status] || status);
-    ajouterInfo(infos, "Diffusion", diffuseur);
+    ajouterInfo(infos, "Statut", STATUTS[status] ?? status);
+    ajouterInfo(infos, "Diffusion", network?.name ?? webChannel?.name ?? "Diffuseur inconnu");
     ajouterInfo(infos, "Genres", texteGenres(genres));
-    ajouterInfo(infos, "Note", note !== null ? `${note} / 10` : "Pas encore notée");
+    ajouterInfo(infos, "Note", note === null ? "Pas encore notée" : `${note} / 10`);
 
     const resume = document.createElement("p");
     resume.className = "detail-resume";
@@ -285,31 +266,66 @@ export function afficherDetail(serie, distribution) {
         vide.textContent = "Distribution non renseignée.";
         listeRoles.append(vide);
     }
-    const premierRoles = distribution.slice(0, 6);
-    premierRoles.forEach(({ person: { name: acteur }, character: { name: personnage } }) => {
+    // les 6 premiers rôles suffisent (certaines séries en ont des dizaines)
+    const premiersRoles = distribution.slice(0, 6);
+    premiersRoles.forEach(({ person, character }) => {
         const ligne = document.createElement("li");
-        ligne.textContent = `${acteur} (${personnage})`;
+        ligne.textContent = `${person?.name ?? "?"} (${character?.name ?? "rôle inconnu"})`;
         listeRoles.append(ligne);
     });
 
     const actions = document.createElement("div");
     actions.className = "detail-actions";
+    const enFavori = favoris.some((favori) => favori.id === id);
     const boutonFermer = document.createElement("button");
     boutonFermer.type = "button";
     boutonFermer.className = "bouton bouton-secondaire";
     boutonFermer.dataset.action = "fermer";
     boutonFermer.textContent = "Fermer la fiche";
-    actions.append(boutonFermer);
+    actions.append(creerBoutonFavori(id, titre, enFavori), boutonFermer);
 
     texte.append(titreDetail, infos, resume, titreDistribution, listeRoles, actions);
     zoneDetail.append(texte);
     zoneDetail.hidden = false;
-    titreDetail.focus(); // on amène le lecteur (et le lecteur d'écran) sur la fiche
 }
 
-// Cache la fiche et ramène le focus sur la recherche
-export function fermerDetail() {
-    zoneDetail.hidden = true;
-    zoneDetail.replaceChildren();
-    champRecherche.focus();
+// ===== Le focus : tout reconstruire fait disparaître le bouton qui l'avait =====
+
+// Note quel bouton a le focus (sa zone, son action, sa série)
+function memoriserFocus() {
+    const actif = document.activeElement;
+    const zone = actif?.closest("#zone-resultats, #zone-detail, #zone-favoris");
+    if (!zone || !actif.dataset.action) {
+        return null;
+    }
+    return { zone, action: actif.dataset.action, id: actif.dataset.id };
+}
+
+// Après le rendu : la fiche qui vient de s'ouvrir, la recherche si elle s'est fermée,
+// sinon le bouton équivalent dans la nouvelle interface. React fera ce travail pour vous.
+function retablirFocus(focusAvant, detail) {
+    const idDetail = detail?.serie.id ?? null;
+    if (idDetail !== idDetailAffiche) {
+        idDetailAffiche = idDetail;
+        if (idDetail === null) {
+            champRecherche.focus();
+        } else {
+            document.querySelector("#detail-titre").focus();
+        }
+        return;
+    }
+    if (focusAvant) {
+        const { zone, action, id } = focusAvant;
+        zone.querySelector(`[data-action="${action}"][data-id="${id}"]`)?.focus();
+    }
+}
+
+// ===== La seule fonction exportée : l'interface entière, à partir de l'état =====
+export function rendu(state) {
+    const focusAvant = memoriserFocus();
+    afficherMessage(state);
+    afficherDetail(state);
+    afficherSeries(state);
+    afficherFavoris(state);
+    retablirFocus(focusAvant, state.detail);
 }
